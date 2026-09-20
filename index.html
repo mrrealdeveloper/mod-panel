@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moderation Panel</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel-2:#1c2128; --line:#30363d;
+  --text:#e6edf3; --dim:#8b949e; --faint:#6e7681;
+  --accent:#58a6ff; --accent-dim:#1f6feb;
+  --danger:#f85149; --danger-bg:#2d1315;
+  --warn:#d29922; --warn-bg:#2b2213;
+  --ok:#3fb950; --ok-bg:#12261a;
+  --radius:8px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+
+/* ---------- gate ---------- */
+#gate{
+  position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center;
+  background:var(--bg); padding:16px;
+}
+#gate .box{
+  width:100%; max-width:360px; background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; padding:28px 24px;
+}
+#gate h1{margin:0 0 4px; font-size:18px; letter-spacing:-.01em}
+#gate p{margin:0 0 20px; color:var(--dim); font-size:13px}
+#gate input{
+  width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--line);
+  border-radius:var(--radius); font-family:var(--mono); margin-bottom:10px;
+}
+#gate input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15)}
+#gate .err{color:var(--danger); font-size:12px; min-height:18px; margin:0 0 10px}
+
+/* ---------- shell ---------- */
+#app{display:none; max-width:1080px; margin:0 auto; padding:0 16px 64px}
+header.top{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:18px 0 14px; border-bottom:1px solid var(--line); margin-bottom:0;
+}
+header.top .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none;
+  box-shadow:0 0 0 3px rgba(63,185,80,.15)}
+header.top h1{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em}
+header.top .mode{
+  font-family:var(--mono); font-size:11px; color:var(--warn);
+  background:var(--warn-bg); border:1px solid rgba(210,153,34,.35);
+  padding:2px 8px; border-radius:999px;
+}
+header.top .spacer{flex:1}
+header.top .who{color:var(--dim); font-size:12px; font-family:var(--mono)}
+
+nav.tabs{display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:24px; overflow-x:auto}
+nav.tabs button{
+  background:none; border:none; border-bottom:2px solid transparent;
+  padding:12px 14px; color:var(--dim); cursor:pointer; white-space:nowrap; font-size:13px;
+}
+nav.tabs button:hover{color:var(--text)}
+nav.tabs button[aria-selected="true"]{color:var(--text); border-bottom-color:var(--accent-dim); font-weight:500}
+nav.tabs .count{
+  font-family:var(--mono); font-size:11px; color:var(--faint);
+  background:var(--panel-2); border-radius:999px; padding:1px 6px; margin-left:6px;
+}
+
+section.tab{display:none}
+section.tab.active{display:block}
+
+/* ---------- cards ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:20px}
+.card > h2{
+  margin:0; padding:13px 16px; font-size:13px; font-weight:600; border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:8px;
+}
+.card > h2 .sub{font-weight:400; color:var(--faint); font-size:12px}
+.card .body{padding:16px}
+
+.row{display:flex; gap:10px; flex-wrap:wrap}
+.field{display:flex; flex-direction:column; gap:5px; flex:1 1 180px; min-width:0}
+.field label{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em}
+.field input,.field select,.field textarea{
+  background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:8px 10px; width:100%;
+}
+.field textarea{resize:vertical; min-height:60px}
+.field input:focus,.field select:focus,.field textarea:focus{
+  outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(88,166,255,.15)
+}
+.field .hint{font-size:11px;color:var(--faint)}
+.mono{font-family:var(--mono)}
+
+button.btn{
+  background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+  padding:8px 14px; cursor:pointer; font-size:13px; white-space:nowrap;
+}
+button.btn:hover{background:#262c36; border-color:#484f58}
+button.btn:active{transform:translateY(1px)}
+button.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+button.btn.primary{background:var(--accent-dim); border-color:var(--accent-dim); color:#fff}
+button.btn.primary:hover{background:#2a7aef}
+button.btn.danger{background:var(--danger-bg); border-color:rgba(248,81,73,.4); color:#ff9b95}
+button.btn.danger:hover{background:#3d1a1c}
+button.btn.small{padding:5px 10px; font-size:12px}
+.actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+
+/* ---------- player card ---------- */
+.player{display:flex; gap:14px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line)}
+.player .av{
+  width:48px;height:48px;border-radius:8px;background:var(--panel-2);flex:none;
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+  font-size:17px;color:var(--faint);border:1px solid var(--line)
+}
+.player .meta{min-width:0;flex:1}
+.player .name{font-weight:600}
+.player .id{font-family:var(--mono); font-size:12px; color:var(--dim)}
+
+/* ---------- tables ---------- */
+.tscroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+table{width:100%; border-collapse:collapse; min-width:440px}
+th{
+  text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+  color:var(--dim); font-weight:500; padding:10px 16px; border-bottom:1px solid var(--line);
+}
+td{padding:11px 16px; border-bottom:1px solid var(--line); vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+td.num{font-family:var(--mono); font-size:12px; color:var(--dim); white-space:nowrap}
+.empty{padding:32px 16px; text-align:center; color:var(--faint); font-size:13px}
+
+.pill{
+  display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
+  font-family:var(--mono); border:1px solid transparent; white-space:nowrap;
+}
+.pill.perm{background:var(--danger-bg); color:#ff9b95; border-color:rgba(248,81,73,.35)}
+.pill.temp{background:var(--warn-bg); color:#e3b341; border-color:rgba(210,153,34,.35)}
+.pill.ok{background:var(--ok-bg); color:#56d364; border-color:rgba(63,185,80,.35)}
+.pill.kick{background:#1b2436; color:#79c0ff; border-color:rgba(88,166,255,.3)}
+.pill.expired{background:var(--panel-2); color:var(--faint); border-color:var(--line)}
+
+/* ---------- log ---------- */
+.logline{display:flex; gap:12px; padding:9px 16px; border-bottom:1px solid var(--line); font-size:13px; align-items:baseline}
+.logline:last-child{border-bottom:none}
+.logline time{font-family:var(--mono); font-size:11px; color:var(--faint); flex:none; width:118px}
+.logline .what{flex:1; min-width:0}
+.logline .by{font-family:var(--mono); font-size:11px; color:var(--faint); flex:none}
+.logline b{font-weight:600}
+.logline .reason{color:var(--dim)}
+
+/* ---------- toast ---------- */
+#toast{
+  position:fixed; left:50%; bottom:24px; transform:translate(-50%,16px);
+  background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+  padding:10px 16px; font-size:13px; opacity:0; pointer-events:none;
+  transition:opacity .18s, transform .18s; z-index:200; max-width:90vw;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+#toast.show{opacity:1; transform:translate(-50%,0)}
+#toast.err{border-color:rgba(248,81,73,.5)}
+
+footer.note{color:var(--faint); font-size:12px; padding:8px 0 0; border-top:1px solid var(--line); margin-top:8px}
+
+@media (max-width:620px){
+  .logline time{width:auto}
+  .logline{flex-wrap:wrap; gap:6px}
+  th:nth-child(4),td:nth-child(4){display:none}
+  table{min-width:340px}
+  header.top .who{flex-basis:100%; order:9}
+  .player{flex-wrap:wrap}
+  .player .meta{flex:1 1 140px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ PASSCODE GATE ============ -->
+<div id="gate">
+  <div class="box">
+    <h1>Moderation Panel</h1>
+    <p>Enter the panel passcode to continue.</p>
+    <input id="gate-input" type="password" placeholder="Passcode" autocomplete="off" spellcheck="false">
+    <p class="err" id="gate-err"></p>
+    <button class="btn primary" id="gate-go" style="width:100%">Unlock</button>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <header class="top">
+    <span class="dot"></span>
+    <h1 id="game-name">Game Moderation</h1>
+    <span class="mode" id="mode-badge">DEMO DATA</span>
+    <span class="spacer"></span>
+    <span class="who" id="who"></span>
+    <button class="btn small" id="lock-btn">Lock</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="players" aria-selected="true">Players</button>
+    <button role="tab" data-tab="bans" aria-selected="false">Bans <span class="count" id="c-bans">0</span></button>
+    <button role="tab" data-tab="log" aria-selected="false">Log <span class="count" id="c-log">0</span></button>
+    <button role="tab" data-tab="admins" aria-selected="false">Admins <span class="count" id="c-admins">0</span></button>
+  </nav>
+
+  <!-- ---- PLAYERS ---- -->
+  <section class="tab active" id="tab-players">
+    <div class="card">
+      <h2>Look up a player <span class="sub">username or userId</span></h2>
+      <div class="body">
+        <div class="row">
+          <div class="field" style="flex:2 1 240px">
+            <label for="lookup">Player</label>
+            <input id="lookup" class="mono" placeholder="e.g. Hunter67 or 3048941044" autocomplete="off">
+          </div>
+          <div class="field" style="flex:0 0 auto; justify-content:flex-end">
+            <label>&nbsp;</label>
+            <button class="btn primary" id="lookup-btn">Search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="result-card" style="display:none">
+      <h2>Result</h2>
+      <div id="result-body"></div>
+    </div>
+
+    <div class="card">
+      <h2>Currently in game <span class="sub" id="live-sub"></span></h2>
+      <div id="live-list"></div>
+    </div>
+  </section>
+
+  <!-- ---- BANS ---- -->
+  <section class="tab" id="tab-bans">
+    <div class="card">
+      <h2>Active bans</h2>
+      <div id="bans-table"></div>
+    </div>
+    <div class="card">
+      <h2>Ban by userId <span class="sub">for players not currently in game</span></h2>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label for="mb-id">User ID</label><input id="mb-id" class="mono" inputmode="numeric" placeholder="3048941044"></div>
+          <div class="field"><label for="mb-name">Display name <span class="hint">optional</span></label><input id="mb-name" placeholder="Unknown"></div>
+          <div class="field"><label for="mb-dur">Duration</label>
+            <select id="mb-dur">
+              <option value="3600">1 hour</option>
+              <option value="86400">1 day</option>
+              <option value="604800" selected>7 days</option>
+              <option value="2592000">30 days</option>
+              <option value="0">Permanent</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field"><label for="mb-reason">Reason</label><input id="mb-reason" placeholder="Exploiting / speed hacks"></div>
+        </div>
+        <div class="actions"><button class="btn danger" id="mb-go">Issue ban</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- LOG ---- -->
+  <section class="tab" id="tab-log">
+    <div class="card">
+      <h2>Moderation log
+        <span class="spacer" style="flex:1"></span>
+        <button class="btn small" id="log-export">Export JSON</button>
+        <button class="btn small danger" id="log-clear">Clear</button>
+      </h2>
+      <div id="log-list"></div>
+    </div>
+    <footer class="note">
+      Log lives in this browser only while the panel runs on demo data. Once the Worker is wired up,
+      <span class="mono">Api.listLog()</span> reads the shared server-side log instead.
+    </footer>
+  </section>
+
+  <!-- ---- ADMINS ---- -->
+  <section class="tab" id="tab-admins">
+    <div class="card">
+      <h2>Admin whitelist <span class="sub">userIds allowed to run in-game admin commands</span></h2>
+      <div id="admins-table"></div>
+    </div>
+    <div class="card">
+      <h2>Add an admin</h2>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label for="ad-id">User ID</label><input id="ad-id" class="mono" inputmode="numeric" placeholder="123456789"></div>
+          <div class="field"><label for="ad-name">Label</label><input id="ad-name" placeholder="Name or role"></div>
+          <div class="field"><label for="ad-role">Role</label>
+            <select id="ad-role"><option>Moderator</option><option>Admin</option><option>Owner</option></select>
+          </div>
+        </div>
+        <div class="actions"><button class="btn primary" id="ad-go">Add to whitelist</button></div>
+      </div>
+    </div>
+    <footer class="note">
+      Copy this list into the <span class="mono">ADMINS</span> table at the top of your in-game admin script,
+      or have the server read it from the same DataStore once the Worker is live.
+    </footer>
+  </section>
+
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================================================================
+   CONFIG — edit these, nothing below needs touching
+   ========================================================================= */
+const CONFIG = {
+  GAME_NAME:     "Game Moderation",      // shown in the header
+  PLACE_ID:      135053208690192,        // main game
+  SUBPLACE_ID:   101977986078096,        // waiting room
+  PASSCODE:      "brea67",               // CHANGE THIS before you push
+  OWNER_ID:      3048941044,             // always-admin, cannot be removed
+  MODERATOR:     "Peter",                // name stamped on log entries
+  LIVE:          false,                  // false = demo data, true = call WORKER_URL
+  WORKER_URL:    "",                     // e.g. "https://modpanel.yourname.workers.dev"
+  WORKER_TOKEN:  "",                     // shared secret the Worker checks (leave blank on a public repo)
+  STORAGE_KEY:   "modpanel_v1",
+  SEED_DEMO:     true                    // preload example bans/players on first load
+};
+
+/* =========================================================================
+   STORAGE — safe wrapper, survives private mode / blocked storage
+   ========================================================================= */
+const Store = (() => {
+  let mem = null;
+  const blank = () => ({ bans: [], log: [], admins: [], players: [] });
+  function read() {
+    if (mem) return mem;
+    try {
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+      mem = raw ? JSON.parse(raw) : blank();
+    } catch (e) { mem = blank(); }
+    for (const k of Object.keys(blank())) if (!Array.isArray(mem[k])) mem[k] = [];
+    return mem;
+  }
+  function write() {
+    try { localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(mem)); } catch (e) {}
+  }
+  return {
+    get: () => read(),
+    save: () => write(),
+    reset() { mem = blank(); write(); }
+  };
+})();
+
+/* =========================================================================
+   API ADAPTER
+   Every screen below talks only to Api.*, never to storage directly.
+   To go live: set CONFIG.LIVE = true and fill in WORKER_URL. The mock
+   branch stays as a fallback so the page still renders if the Worker is down.
+   ========================================================================= */
+const Api = (() => {
+
+  async function call(path, body) {
+    const res = await fetch(CONFIG.WORKER_URL.replace(/\/$/, "") + path, {
+      method: body ? "POST" : "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(CONFIG.WORKER_TOKEN ? { "Authorization": "Bearer " + CONFIG.WORKER_TOKEN } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) throw new Error("Worker returned " + res.status);
+    return res.json();
+  }
+
+  const db = () => Store.get();
+  const now = () => Date.now();
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  function logIt(action, target, detail) {
+    db().log.unshift({ id: uid(), at: now(), action, target, detail, by: CONFIG.MODERATOR });
+    if (db().log.length > 500) db().log.length = 500;
+  }
+
+  function activeBan(userId) {
+    return db().bans.find(b => b.userId === userId && (b.until === 0 || b.until > now()) && !b.lifted);
+  }
+
+  return {
+    live: () => CONFIG.LIVE && !!CONFIG.WORKER_URL,
+
+    async listPlayers() {
+      if (this.live()) return call("/players");
+      return db().players;
+    },
+
+    async findPlayer(q) {
+      if (this.live()) return call("/player?q=" + encodeURIComponent(q));
+      const s = String(q).trim().toLowerCase();
+      const byId = db().players.find(p => String(p.userId) === s);
+      if (byId) return byId;
+      const byName = db().players.find(p => p.name.toLowerCase() === s);
+      if (byName) return byName;
+      const banned = db().bans.find(b => String(b.userId) === s || b.name.toLowerCase() === s);
+      if (banned) return { userId: banned.userId, name: banned.name, online: false };
+      if (/^\d{4,}$/.test(s)) return { userId: Number(s), name: "Unknown", online: false, unresolved: true };
+      return null;
+    },
+
+    async ban({ userId, name, reason, seconds }) {
+      if (this.live()) return call("/ban", { userId, name, reason, seconds, by: CONFIG.MODERATOR });
+      const until = seconds > 0 ? now() + seconds * 1000 : 0;
+      db().bans = db().bans.filter(b => b.userId !== userId);
+      db().bans.unshift({ id: uid(), userId, name: name || "Unknown", reason: reason || "No reason given",
+                          at: now(), until, by: CONFIG.MODERATOR, lifted: false });
+      db().players = db().players.filter(p => p.userId !== userId);
+      logIt("ban", { userId, name }, { reason, seconds });
+      Store.save();
+      return { ok: true };
+    },
+
+    async unban(userId) {
+      if (this.live()) return call("/unban", { userId, by: CONFIG.MODERATOR });
+      const b = db().bans.find(x => x.userId === userId);
+      if (b) { b.lifted = true; b.liftedAt = now(); }
+      logIt("unban", { userId, name: b ? b.name : "Unknown" }, {});
+      Store.save();
+      return { ok: true };
+    },
+
+    async kick({ userId, name, reason }) {
+      if (this.live()) return call("/kick", { userId, name, reason, by: CONFIG.MODERATOR });
+      db().players = db().players.filter(p => p.userId !== userId);
+      logIt("kick", { userId, name }, { reason });
+      Store.save();
+      return { ok: true };
+    },
+
+    async listBans() {
+      if (this.live()) return call("/bans");
+      return db().bans;
+    },
+
+    async listLog() {
+      if (this.live()) return call("/log");
+      return db().log;
+    },
+
+    async clearLog() {
+      if (this.live()) return call("/log/clear", { by: CONFIG.MODERATOR });
+      db().log = []; Store.save(); return { ok: true };
+    },
+
+    async listAdmins() {
+      if (this.live()) return call("/admins");
+      return db().admins;
+    },
+
+    async addAdmin({ userId, name, role }) {
+      if (this.live()) return call("/admins/add", { userId, name, role, by: CONFIG.MODERATOR });
+      if (db().admins.some(a => a.userId === userId)) return { ok: false, error: "Already on the whitelist" };
+      db().admins.push({ userId, name: name || "Unnamed", role: role || "Moderator", at: now() });
+      logIt("admin-add", { userId, name }, { role });
+      Store.save();
+      return { ok: true };
+    },
+
+    async removeAdmin(userId) {
+      if (this.live()) return call("/admins/remove", { userId, by: CONFIG.MODERATOR });
+      const a = db().admins.find(x => x.userId === userId);
+      db().admins = db().admins.filter(x => x.userId !== userId);
+      logIt("admin-remove", { userId, name: a ? a.name : "Unknown" }, {});
+      Store.save();
+      return { ok: true };
+    },
+
+    banFor: activeBan
+  };
+})();
+
+/* =========================================================================
+   DEMO SEED — remove this block once you go live
+   ========================================================================= */
+function seedDemo() {
+  const d = Store.get();
+  if (!CONFIG.SEED_DEMO) return;
+  if (d.admins.length || d.bans.length || d.players.length) return;
+  const h = 3600e3;
+  d.admins = [
+    { userId: CONFIG.OWNER_ID, name: "Peter", role: "Owner", at: Date.now() - 400 * h }
+  ];
+  d.players = [
+    { userId: 2481093, name: "Hunter67",     online: true, joined: Date.now() - 42 * 60e3 },
+    { userId: 5590211, name: "NoobSlayerX",  online: true, joined: Date.now() - 18 * 60e3 },
+    { userId: 7712004, name: "ghostcar_99",  online: true, joined: Date.now() -  6 * 60e3 },
+    { userId: 3390877, name: "MilkTeaFan",   online: true, joined: Date.now() -  2 * 60e3 }
+  ];
+  d.bans = [
+    { id: "seed1", userId: 8812340, name: "speedrunner_x", reason: "Speed exploit, 3rd offence",
+      at: Date.now() - 26 * h, until: 0, by: "Peter", lifted: false },
+    { id: "seed2", userId: 4409912, name: "TrollKing2012", reason: "Chat abuse",
+      at: Date.now() - 5 * h, until: Date.now() + 43 * h, by: "Peter", lifted: false }
+  ];
+  d.log = [
+    { id: "l1", at: Date.now() - 5 * h,  action: "ban",  by: "Peter",
+      target: { userId: 4409912, name: "TrollKing2012" }, detail: { reason: "Chat abuse", seconds: 172800 } },
+    { id: "l2", at: Date.now() - 26 * h, action: "ban",  by: "Peter",
+      target: { userId: 8812340, name: "speedrunner_x" }, detail: { reason: "Speed exploit, 3rd offence", seconds: 0 } },
+    { id: "l3", at: Date.now() - 31 * h, action: "kick", by: "Peter",
+      target: { userId: 6650021, name: "afk_guy" }, detail: { reason: "AFK in queue" } }
+  ];
+  Store.save();
+}
+
+/* =========================================================================
+   UI
+   ========================================================================= */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function toast(msg, isErr) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = "show" + (isErr ? " err" : "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.className = ""; }, 2600);
+}
+function ago(ts) {
+  const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return s + "s ago";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
+function until(ts) {
+  if (ts === 0) return "never";
+  const s = Math.floor((ts - Date.now()) / 1000);
+  if (s <= 0) return "expired";
+  if (s < 3600) return "in " + Math.floor(s / 60) + "m";
+  if (s < 86400) return "in " + Math.floor(s / 3600) + "h";
+  return "in " + Math.floor(s / 86400) + "d";
+}
+function stamp(ts) {
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, "0");
+  return p(d.getMonth() + 1) + "/" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function initials(name) {
+  return String(name || "?").replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase() || "??";
+}
+
+/* ---- gate ---- */
+function unlock() {
+  const v = $("#gate-input").value;
+  if (v === CONFIG.PASSCODE) {
+    $("#gate").style.display = "none";
+    $("#app").style.display = "block";
+    boot();
+  } else {
+    $("#gate-err").textContent = "Wrong passcode.";
+    $("#gate-input").select();
+  }
+}
+$("#gate-go").addEventListener("click", unlock);
+$("#gate-input").addEventListener("keydown", e => {
+  $("#gate-err").textContent = "";
+  if (e.key === "Enter") unlock();
+});
+$("#lock-btn").addEventListener("click", () => {
+  $("#app").style.display = "none";
+  $("#gate").style.display = "flex";
+  $("#gate-input").value = "";
+  $("#gate-err").textContent = "";
+  $("#gate-input").focus();
+});
+
+/* ---- tabs ---- */
+$$("nav.tabs button").forEach(b => {
+  b.addEventListener("click", () => {
+    $$("nav.tabs button").forEach(x => x.setAttribute("aria-selected", "false"));
+    b.setAttribute("aria-selected", "true");
+    $$("section.tab").forEach(s => s.classList.remove("active"));
+    $("#tab-" + b.dataset.tab).classList.add("active");
+    renderAll();
+  });
+});
+
+/* ---- players tab ---- */
+async function renderLive() {
+  const players = await Api.listPlayers();
+  $("#live-sub").textContent = players.length + (players.length === 1 ? " player" : " players");
+  const el = $("#live-list");
+  if (!players.length) { el.innerHTML = '<div class="empty">Nobody in game right now.</div>'; return; }
+  el.innerHTML = players.map(p => `
+    <div class="player">
+      <div class="av">${esc(initials(p.name))}</div>
+      <div class="meta">
+        <div class="name">${esc(p.name)}</div>
+        <div class="id">${p.userId} &middot; joined ${p.joined ? esc(ago(p.joined)) : "—"}</div>
+      </div>
+      <button class="btn small" data-kick="${p.userId}" data-name="${esc(p.name)}">Kick</button>
+      <button class="btn small danger" data-quickban="${p.userId}" data-name="${esc(p.name)}">Ban</button>
+    </div>`).join("");
+
+  el.querySelectorAll("[data-kick]").forEach(b => b.addEventListener("click", async () => {
+    const reason = prompt("Kick reason for " + b.dataset.name + ":", "Breaking server rules");
+    if (reason === null) return;
+    await Api.kick({ userId: Number(b.dataset.kick), name: b.dataset.name, reason });
+    toast(b.dataset.name + " kicked");
+    renderAll();
+  }));
+  el.querySelectorAll("[data-quickban]").forEach(b => b.addEventListener("click", () => {
+    showPlayer({ userId: Number(b.dataset.quickban), name: b.dataset.name, online: true });
+    $("#result-card").scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
+}
+
+function showPlayer(p) {
+  const card = $("#result-card"), body = $("#result-body");
+  if (!p) {
+    card.style.display = "block";
+    body.innerHTML = '<div class="empty">No player found. Try the exact username, or paste their userId.</div>';
+    return;
+  }
+  const ban = Api.banFor(p.userId);
+  const status = ban
+    ? `<span class="pill ${ban.until === 0 ? "perm" : "temp"}">${ban.until === 0 ? "PERMANENTLY BANNED" : "BANNED &middot; lifts " + esc(until(ban.until))}</span>`
+    : `<span class="pill ok">NO ACTIVE BAN</span>`;
+
+  card.style.display = "block";
+  body.innerHTML = `
+    <div class="player" style="border-bottom:1px solid var(--line)">
+      <div class="av">${esc(initials(p.name))}</div>
+      <div class="meta">
+        <div class="name">${esc(p.name)}${p.unresolved ? ' <span class="pill expired">unresolved id</span>' : ""}</div>
+        <div class="id">${p.userId} &middot; ${p.online ? "in game now" : "offline"}</div>
+      </div>
+      <div>${status}</div>
+    </div>
+    <div class="body">
+      ${ban ? `
+        <div class="row" style="margin-bottom:14px">
+          <div class="field"><label>Existing ban reason</label><div class="mono" style="color:var(--dim)">${esc(ban.reason)}</div></div>
+          <div class="field"><label>Issued</label><div class="mono" style="color:var(--dim)">${esc(stamp(ban.at))} by ${esc(ban.by)}</div></div>
+        </div>
+        <div class="actions"><button class="btn primary" id="rp-unban">Lift this ban</button></div>
+      ` : `
+        <div class="row">
+          <div class="field" style="flex:2 1 240px"><label for="rp-reason">Reason</label>
+            <input id="rp-reason" placeholder="What did they do?"></div>
+          <div class="field"><label for="rp-dur">Duration</label>
+            <select id="rp-dur">
+              <option value="3600">1 hour</option>
+              <option value="86400">1 day</option>
+              <option value="604800" selected>7 days</option>
+              <option value="2592000">30 days</option>
+              <option value="0">Permanent</option>
+            </select></div>
+        </div>
+        <div class="actions">
+          <button class="btn danger" id="rp-ban">Ban player</button>
+          ${p.online ? '<button class="btn" id="rp-kick">Kick only</button>' : ""}
+        </div>
+      `}
+    </div>`;
+
+  const u = $("#rp-unban");
+  if (u) u.addEventListener("click", async () => {
+    await Api.unban(p.userId);
+    toast("Ban lifted for " + p.name);
+    showPlayer(p); renderAll();
+  });
+  const bb = $("#rp-ban");
+  if (bb) bb.addEventListener("click", async () => {
+    const reason = $("#rp-reason").value.trim();
+    if (!reason) { toast("Give a reason first.", true); $("#rp-reason").focus(); return; }
+    await Api.ban({ userId: p.userId, name: p.name, reason, seconds: Number($("#rp-dur").value) });
+    toast(p.name + " banned");
+    showPlayer(p); renderAll();
+  });
+  const kb = $("#rp-kick");
+  if (kb) kb.addEventListener("click", async () => {
+    const reason = $("#rp-reason").value.trim() || "Kicked by moderator";
+    await Api.kick({ userId: p.userId, name: p.name, reason });
+    toast(p.name + " kicked");
+    showPlayer({ ...p, online: false }); renderAll();
+  });
+}
+
+async function doLookup() {
+  const q = $("#lookup").value.trim();
+  if (!q) { toast("Type a username or userId.", true); return; }
+  showPlayer(await Api.findPlayer(q));
+}
+$("#lookup-btn").addEventListener("click", doLookup);
+$("#lookup").addEventListener("keydown", e => { if (e.key === "Enter") doLookup(); });
+
+/* ---- bans tab ---- */
+async function renderBans() {
+  const all = await Api.listBans();
+  const active = all.filter(b => !b.lifted && (b.until === 0 || b.until > Date.now()));
+  $("#c-bans").textContent = active.length;
+  const el = $("#bans-table");
+  if (!all.length) { el.innerHTML = '<div class="empty">No bans on record.</div>'; return; }
+  el.innerHTML = `<div class="tscroll"><table><thead><tr>
+      <th>Player</th><th>Reason</th><th>Status</th><th>Issued</th><th></th>
+    </tr></thead><tbody>` +
+    all.map(b => {
+      const live = !b.lifted && (b.until === 0 || b.until > Date.now());
+      const pill = b.lifted ? '<span class="pill expired">lifted</span>'
+        : b.until === 0 ? '<span class="pill perm">permanent</span>'
+        : b.until > Date.now() ? `<span class="pill temp">lifts ${esc(until(b.until))}</span>`
+        : '<span class="pill expired">expired</span>';
+      return `<tr>
+        <td><b>${esc(b.name)}</b><br><span class="num">${b.userId}</span></td>
+        <td>${esc(b.reason)}</td>
+        <td>${pill}</td>
+        <td class="num">${esc(stamp(b.at))}<br>${esc(b.by)}</td>
+        <td style="text-align:right">${live ? `<button class="btn small" data-unban="${b.userId}" data-name="${esc(b.name)}">Unban</button>` : ""}</td>
+      </tr>`;
+    }).join("") + "</tbody></table></div>";
+
+  el.querySelectorAll("[data-unban]").forEach(btn => btn.addEventListener("click", async () => {
+    await Api.unban(Number(btn.dataset.unban));
+    toast("Unbanned " + btn.dataset.name);
+    renderAll();
+  }));
+}
+
+$("#mb-go").addEventListener("click", async () => {
+  const id = Number($("#mb-id").value.trim());
+  if (!id || id < 1) { toast("Enter a numeric userId.", true); $("#mb-id").focus(); return; }
+  const reason = $("#mb-reason").value.trim();
+  if (!reason) { toast("Give a reason first.", true); $("#mb-reason").focus(); return; }
+  await Api.ban({ userId: id, name: $("#mb-name").value.trim() || "Unknown",
+                  reason, seconds: Number($("#mb-dur").value) });
+  $("#mb-id").value = $("#mb-name").value = $("#mb-reason").value = "";
+  toast("Ban issued for " + id);
+  renderAll();
+});
+
+/* ---- log tab ---- */
+const VERB = {
+  ban: ["banned", "perm"], unban: ["unbanned", "ok"], kick: ["kicked", "kick"],
+  "admin-add": ["added to whitelist", "ok"], "admin-remove": ["removed from whitelist", "expired"]
+};
+async function renderLog() {
+  const log = await Api.listLog();
+  $("#c-log").textContent = log.length;
+  const el = $("#log-list");
+  if (!log.length) { el.innerHTML = '<div class="empty">Nothing logged yet.</div>'; return; }
+  el.innerHTML = log.map(e => {
+    const v = VERB[e.action] || [e.action, "expired"];
+    const dur = e.detail && e.detail.seconds !== undefined
+      ? (e.detail.seconds === 0 ? " permanently" : "")
+      : "";
+    return `<div class="logline">
+      <time>${esc(stamp(e.at))}</time>
+      <span class="what">
+        <span class="pill ${v[1]}">${esc(e.action)}</span>
+        <b>${esc(e.target && e.target.name || "?")}</b>
+        <span class="num">${e.target && e.target.userId || ""}</span>
+        ${dur}
+        ${e.detail && e.detail.reason ? `<span class="reason">— ${esc(e.detail.reason)}</span>` : ""}
+      </span>
+      <span class="by">${esc(e.by)} &middot; ${esc(ago(e.at))}</span>
+    </div>`;
+  }).join("");
+}
+$("#log-export").addEventListener("click", async () => {
+  const data = JSON.stringify(await Api.listLog(), null, 2);
+  const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = "moderation-log.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("Log exported");
+});
+$("#log-clear").addEventListener("click", async () => {
+  if (!confirm("Clear the whole moderation log?")) return;
+  await Api.clearLog(); toast("Log cleared"); renderAll();
+});
+
+/* ---- admins tab ---- */
+async function renderAdmins() {
+  const admins = await Api.listAdmins();
+  $("#c-admins").textContent = admins.length;
+  const el = $("#admins-table");
+  if (!admins.length) { el.innerHTML = '<div class="empty">Whitelist is empty.</div>'; return; }
+  el.innerHTML = `<div class="tscroll"><table><thead><tr>
+      <th>User ID</th><th>Label</th><th>Role</th><th>Added</th><th></th>
+    </tr></thead><tbody>` +
+    admins.map(a => {
+      const owner = a.userId === CONFIG.OWNER_ID;
+      return `<tr>
+        <td class="num" style="color:var(--text)">${a.userId}</td>
+        <td>${esc(a.name)}${owner ? ' <span class="pill ok">pinned</span>' : ""}</td>
+        <td>${esc(a.role)}</td>
+        <td class="num">${esc(stamp(a.at))}</td>
+        <td style="text-align:right">${owner ? "" :
+          `<button class="btn small danger" data-rm="${a.userId}" data-name="${esc(a.name)}">Remove</button>`}</td>
+      </tr>`;
+    }).join("") + "</tbody></table></div>";
+
+  el.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Remove " + b.dataset.name + " from the admin whitelist?")) return;
+    await Api.removeAdmin(Number(b.dataset.rm));
+    toast("Removed " + b.dataset.name);
+    renderAll();
+  }));
+}
+$("#ad-go").addEventListener("click", async () => {
+  const id = Number($("#ad-id").value.trim());
+  if (!id || id < 1) { toast("Enter a numeric userId.", true); $("#ad-id").focus(); return; }
+  const r = await Api.addAdmin({ userId: id, name: $("#ad-name").value.trim(), role: $("#ad-role").value });
+  if (r && r.ok === false) { toast(r.error, true); return; }
+  $("#ad-id").value = $("#ad-name").value = "";
+  toast("Added to whitelist");
+  renderAll();
+});
+
+/* ---- boot ---- */
+async function renderAll() {
+  try {
+    await Promise.all([renderLive(), renderBans(), renderLog(), renderAdmins()]);
+  } catch (e) {
+    toast("Backend error: " + e.message, true);
+  }
+}
+function boot() {
+  $("#game-name").textContent = CONFIG.GAME_NAME;
+  $("#who").textContent = CONFIG.MODERATOR + " · place " + CONFIG.PLACE_ID;
+  const badge = $("#mode-badge");
+  if (Api.live()) {
+    badge.textContent = "LIVE";
+    badge.style.color = "var(--ok)";
+    badge.style.background = "var(--ok-bg)";
+    badge.style.borderColor = "rgba(63,185,80,.35)";
+  }
+  seedDemo();
+  renderAll();
+}
+$("#gate-input").focus();
+</script>
+</body>
+</html>
