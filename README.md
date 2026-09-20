@@ -1,2 +1,2 @@
 # mod-panel
-mod panel
+just mod panel  :D
